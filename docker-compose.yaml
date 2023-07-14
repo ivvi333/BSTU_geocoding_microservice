@@ -1,0 +1,107 @@
+services:
+  db:
+    container_name: geoservice-db
+    build: ./db
+    restart: always
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db/data:/data
+    ports:
+      - "5440:5432"
+    env_file:
+      - ./env/db.env
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d geoservice_db"]
+      interval: 5s
+      timeout: 60s
+      retries: 5
+      start_period: 5s
+
+  pgadmin:
+    container_name: geoservice-admin
+    image: dpage/pgadmin4
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./env/pgadmin.env
+    ports:
+      - 5050:80
+  
+  app:
+    container_name: geoservice-app
+    build: ./app
+    stop_signal: SIGINT
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ./env/app.env
+    ports:
+      - "5000:5000"
+
+  es01:
+    image: elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata01:/usr/share/elasticsearch/data
+    ports:
+      - ${ES_PORT}:9200
+    environment:
+      - node.name=es01
+      - cluster.name=${CLUSTER_NAME}
+      - cluster.initial_master_nodes=es01,es02,es03
+      - discovery.seed_hosts=es02,es03
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - bootstrap.memory_lock=true
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  es02:
+    depends_on:
+      - es01
+    image: elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata02:/usr/share/elasticsearch/data
+    environment:
+      - node.name=es02
+      - cluster.name=${CLUSTER_NAME}
+      - cluster.initial_master_nodes=es01,es02,es03
+      - discovery.seed_hosts=es01,es03
+      - bootstrap.memory_lock=true
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+  es03:
+    depends_on:
+      - es02
+    image: elasticsearch:${STACK_VERSION}
+    volumes:
+      - esdata03:/usr/share/elasticsearch/data
+    environment:
+      - node.name=es03
+      - cluster.name=${CLUSTER_NAME}
+      - cluster.initial_master_nodes=es01,es02,es03
+      - discovery.seed_hosts=es01,es02
+      - bootstrap.memory_lock=true
+    mem_limit: ${MEM_LIMIT}
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+
+volumes:
+  dbdata:
+    driver: local
+  esdata01:
+    driver: local
+  esdata02:
+    driver: local
+  esdata03:
+    driver: local

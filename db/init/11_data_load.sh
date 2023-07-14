@@ -1,0 +1,1 @@
+osm2pgsql -l -G -d geoservice_db -S ./data/data.style ./data/data.osm.pbf -C 3000
